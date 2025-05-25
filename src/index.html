@@ -1,29 +1,65 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta http-equiv="Content-Type" content="text/html;charset=UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Story Apps - Berbagi cerita dengan komunitas Dicoding" />
+    <meta name="theme-color" content="#2658c9" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    
     <link rel="shortcut icon" href="/favicon.png" />
-    <title>App</title>
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Preconnect to API domain -->
+    <link rel="preconnect" href="https://story-api.dicoding.dev" crossorigin />
+    
+    <!-- Google Fonts -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    
+    <title>Story Apps</title>
 
     <script type="module" src="/scripts/index.js"></script>
   </head>
   <body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    
     <header>
-      <div class="main-header container">
-        <a class="brand-name" href="#/">App</a>
+      <div class="container navbar">
+        <a class="brand-name" href="#/">Story Apps</a>
 
-        <nav id="navigation-drawer" class="navigation-drawer">
+        <nav id="nav-container">
           <ul id="nav-list" class="nav-list">
-            <li><a href="#/">Beranda</a></li>
-            <li><a href="#/about">About</a></li>
+            <li><a href="#/" class="nav-link active">Home</a></li>
+            <li><a href="#/login" class="nav-link">Login</a></li>
+            <li><a href="#/register" class="nav-link">Register</a></li>
           </ul>
         </nav>
-
-        <button id="drawer-button" class="drawer-button">☰</button>
       </div>
     </header>
 
     <main id="main-content" class="main-content"></main>
+    
+    <footer>
+      <div class="container">
+        <p>© 2025 Story Apps</p>
+      </div>
+    </footer>
+    
+    <!-- Welcome Modal (hidden by default) -->
+    <div id="welcome-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-icon">
+          <div class="info-icon">i</div>
+        </div>
+        <h2>Welcome to Dicoding Story!</h2>
+        <p>Log in to see and share stories from the Dicoding community.</p>
+        <div class="modal-actions">
+          <button id="login-modal-btn" class="primary-button">Log In</button>
+          <button id="later-modal-btn" class="secondary-button">Maybe Later</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

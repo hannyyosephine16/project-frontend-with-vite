@@ -1,46 +1,53 @@
 import routes from '../routes/routes';
 import { getActiveRoute } from '../routes/url-parser';
+import AuthStore from '../data/auth-store';
 
 class App {
   #content = null;
-  #drawerButton = null;
-  #navigationDrawer = null;
+  #currentPage = null;
 
-  constructor({ navigationDrawer, drawerButton, content }) {
+  constructor({ content }) {
     this.#content = content;
-    this.#drawerButton = drawerButton;
-    this.#navigationDrawer = navigationDrawer;
-
-    this.#setupDrawer();
-  }
-
-  #setupDrawer() {
-    this.#drawerButton.addEventListener('click', () => {
-      this.#navigationDrawer.classList.toggle('open');
-    });
-
-    document.body.addEventListener('click', (event) => {
-      if (
-        !this.#navigationDrawer.contains(event.target) &&
-        !this.#drawerButton.contains(event.target)
-      ) {
-        this.#navigationDrawer.classList.remove('open');
-      }
-
-      this.#navigationDrawer.querySelectorAll('a').forEach((link) => {
-        if (link.contains(event.target)) {
-          this.#navigationDrawer.classList.remove('open');
-        }
-      });
-    });
   }
 
   async renderPage() {
     const url = getActiveRoute();
     const page = routes[url];
-
-    this.#content.innerHTML = await page.render();
-    await page.afterRender();
+    
+    // Clean up previous page if needed
+    if (this.#currentPage && typeof this.#currentPage.beforeDestroy === 'function') {
+      await this.#currentPage.beforeDestroy();
+    }
+    
+    this.#currentPage = page;
+    
+    // Use View Transition API if supported
+    if (document.startViewTransition) {
+      document.startViewTransition(async () => {
+        // Update the DOM
+        this.#content.innerHTML = await page.render();
+        await page.afterRender();
+      });
+    } else {
+      // Fallback for browsers that don't support View Transition API
+      this.#content.innerHTML = await page.render();
+      await page.afterRender();
+    }
+    
+    // Update active nav link
+    this._updateActiveNavLink();
+  }
+  
+  _updateActiveNavLink() {
+    const currentHash = window.location.hash || '#/';
+    const navLinks = document.querySelectorAll('.nav-link');
+    
+    navLinks.forEach(link => {
+      link.classList.remove('active');
+      if (link.getAttribute('href') === currentHash) {
+        link.classList.add('active');
+      }
+    });
   }
 }
 
