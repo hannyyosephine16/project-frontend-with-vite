@@ -10,8 +10,15 @@ import StoryApi from './data/api';
 const registerServiceWorker = async () => {
   if ('serviceWorker' in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js');
+      const registration = await navigator.serviceWorker.register('/sw.js', {
+        scope: '/'
+      });
       console.log('Service worker registration successful:', registration);
+      
+      // Setup push notification subscription after registration
+      registration.addEventListener('updatefound', () => {
+        console.log('New service worker found');
+      });
       
       // Setup push notification subscription
       setupPushNotification(registration);
@@ -26,9 +33,26 @@ const setupPushNotification = async (registration) => {
   const auth = AuthStore.getAuth();
   
   // Only setup if user is logged in
-  if (!auth) return;
+  if (!auth) {
+    console.log('User not logged in, skipping push notification setup');
+    return;
+  }
   
   try {
+    // Check if notification permission is granted
+    if (Notification.permission === 'default') {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        console.log('Notification permission denied');
+        return;
+      }
+    }
+    
+    if (Notification.permission !== 'granted') {
+      console.log('Notification permission not granted');
+      return;
+    }
+    
     const vapidPublicKey = 'BCCs2eonMI-6H2ctvFaWg-UYdDv387Vno_bzUzALpB442r2lCnsHmtrx8biyPi_E-1fSGABK_Qs_GlvPoJJqxbk';
     
     // Convert VAPID key to the format expected by the browser
@@ -44,15 +68,24 @@ const setupPushNotification = async (registration) => {
         applicationServerKey,
       });
       
+      console.log('Push subscription created:', subscription);
+      
       // Send subscription to server
-      await StoryApi.subscribeNotification({
-        token: auth.token,
-        endpoint: subscription.endpoint,
-        keys: {
-          p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
-          auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth')))),
-        },
-      });
+      try {
+        await StoryApi.subscribeNotification({
+          token: auth.token,
+          endpoint: subscription.endpoint,
+          keys: {
+            p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+            auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth')))),
+          },
+        });
+        console.log('Push subscription sent to server');
+      } catch (apiError) {
+        console.error('Failed to send subscription to server:', apiError);
+      }
+    } else {
+      console.log('Push subscription already exists');
     }
   } catch (error) {
     console.error('Error setting up push notification:', error);
@@ -78,8 +111,10 @@ const urlBase64ToUint8Array = (base64String) => {
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('Application initializing...');
+  
   // Register service worker
-  registerServiceWorker();
+  await registerServiceWorker();
   
   // Update navigation based on auth state
   updateNavigation();
@@ -87,16 +122,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize app
   const app = new App({
     content: document.querySelector('#main-content'),
-    drawerButton: document.querySelector('#drawer-button'),
-    navigationDrawer: document.querySelector('#navigation-drawer'),
   });
   
+  // Render initial page
   await app.renderPage();
 
+  // Handle hash changes for SPA routing
   window.addEventListener('hashchange', async () => {
+    console.log('Hash changed to:', window.location.hash);
     await app.renderPage();
     updateActiveNavLink();
   });
+  
+  // Update active nav link on initial load
+  updateActiveNavLink();
+  
+  console.log('Application initialized successfully');
 });
 
 // Update navigation based on auth state
@@ -104,29 +145,74 @@ function updateNavigation() {
   const navList = document.getElementById('nav-list');
   
   if (AuthStore.isLoggedIn()) {
+    const auth = AuthStore.getAuth();
+    console.log('User is logged in:', auth.name);
+    
     navList.innerHTML = `
-      <li><a href="#/" class="nav-link active">Home</a></li>
+      <li><a href="#/" class="nav-link">Home</a></li>
       <li><a href="#/map" class="nav-link">Story Map</a></li>
       <li><a href="#/add" class="nav-link">Add Story</a></li>
       <li><a href="#/about" class="nav-link">About</a></li>
-      <li><a href="#" id="logout-button" class="nav-link">Logout</a></li>
+      <li><a href="#" id="logout-button" class="nav-link">Logout (${auth.name})</a></li>
     `;
     
     // Setup logout button
-    document.getElementById('logout-button').addEventListener('click', (event) => {
-      event.preventDefault();
-      AuthStore.destroyAuth();
-      window.location.hash = '#/';
-      window.location.reload(); // Reload to update navigation
-    });
+    const logoutButton = document.getElementById('logout-button');
+    if (logoutButton) {
+      logoutButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        console.log('User logging out');
+        
+        // Unsubscribe from push notifications before logout
+        unsubscribeFromPushNotifications().finally(() => {
+          AuthStore.destroyAuth();
+          window.location.hash = '#/';
+          window.location.reload(); // Reload to update navigation
+        });
+      });
+    }
   } else {
+    console.log('User is not logged in');
     navList.innerHTML = `
-      <li><a href="#/" class="nav-link active">Home</a></li>
+      <li><a href="#/" class="nav-link">Home</a></li>
       <li><a href="#/login" class="nav-link">Login</a></li>
       <li><a href="#/register" class="nav-link">Register</a></li>
     `;
   }
 }
+
+// Unsubscribe from push notifications
+const unsubscribeFromPushNotifications = async () => {
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) {
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) {
+          const auth = AuthStore.getAuth();
+          if (auth) {
+            try {
+              // Unsubscribe from server
+              await StoryApi.unsubscribeNotification({
+                token: auth.token,
+                endpoint: subscription.endpoint,
+              });
+              console.log('Unsubscribed from server');
+            } catch (error) {
+              console.error('Failed to unsubscribe from server:', error);
+            }
+          }
+          
+          // Unsubscribe locally
+          await subscription.unsubscribe();
+          console.log('Push subscription cancelled');
+        }
+      }
+    } catch (error) {
+      console.error('Error unsubscribing from push notifications:', error);
+    }
+  }
+};
 
 // Update active navigation link based on current hash
 function updateActiveNavLink() {
@@ -140,3 +226,12 @@ function updateActiveNavLink() {
     }
   });
 }
+
+// Handle authentication state changes
+window.addEventListener('storage', (event) => {
+  if (event.key === AuthStore.AUTH_KEY) {
+    console.log('Auth state changed in another tab');
+    updateNavigation();
+    updateActiveNavLink();
+  }
+});
