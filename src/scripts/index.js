@@ -6,6 +6,38 @@ import CONFIG from './config';
 import AuthStore from './data/auth-store';
 import StoryApi from './data/api';
 
+// Tambahkan import untuk debug helper (opsional)
+import './utils/debug-helper.js';
+
+// Konfigurasi untuk fitur kamera dan lokasi
+const CAMERA_CONFIG = {
+  // Kualitas foto default (0.0 - 1.0)
+  PHOTO_QUALITY: 0.8,
+  // Resolusi kamera default
+  DEFAULT_WIDTH: 640,
+  DEFAULT_HEIGHT: 480
+};
+
+// Konfigurasi untuk peta lokasi
+const MAP_CONFIG = {
+  // Koordinat default (Indonesia)
+  DEFAULT_LAT: -2.5489,
+  DEFAULT_LON: 118.0149,
+  DEFAULT_ZOOM: 5,
+  // Zoom saat memilih lokasi
+  SELECTION_ZOOM: 15,
+  // Provider peta
+  TILE_PROVIDER: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  ATTRIBUTION: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+};
+
+// Tambahkan konfigurasi ke global window object agar bisa diakses di semua komponen
+window.APP_CONFIG = {
+  ...CONFIG,
+  CAMERA: CAMERA_CONFIG,
+  MAP: MAP_CONFIG
+};
+
 // Service Worker registration
 const registerServiceWorker = async () => {
   if ('serviceWorker' in navigator) {
@@ -22,8 +54,63 @@ const registerServiceWorker = async () => {
       
       // Setup push notification subscription
       setupPushNotification(registration);
+
+      // Tambahkan ini: Periksa dan minta izin kamera dan lokasi
+      checkPermissions();
     } catch (error) {
       console.error('Service worker registration failed:', error);
+    }
+  }
+};
+
+// Fungsi untuk memeriksa dan meminta izin kamera dan lokasi
+const checkPermissions = async () => {
+  // Jika tidak di HTTPS atau localhost, tampilkan peringatan
+  const isSecureContext = window.isSecureContext;
+  if (!isSecureContext) {
+    console.warn('This site is not running in a secure context. Camera and location features require HTTPS or localhost.');
+    return;
+  }
+
+  // Periksa dan minta izin kamera jika browser mendukung
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      // Minta izin kamera jika user sudah login
+      if (AuthStore.isLoggedIn()) {
+        const permission = await navigator.permissions.query({ name: 'camera' });
+        console.log('Camera permission status:', permission.state);
+        
+        // Jika izin 'prompt', minta izin saat aplikasi dimulai
+        if (permission.state === 'prompt') {
+          // Ini hanya akan minta izin, stream akan langsung dimatikan
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach(track => track.stop());
+        }
+      }
+    } catch (e) {
+      console.log('Could not check camera permission:', e);
+    }
+  }
+
+  // Periksa dan minta izin lokasi jika browser mendukung
+  if ('geolocation' in navigator) {
+    try {
+      // Minta izin lokasi jika user sudah login
+      if (AuthStore.isLoggedIn()) {
+        const permission = await navigator.permissions.query({ name: 'geolocation' });
+        console.log('Geolocation permission status:', permission.state);
+        
+        // Jika izin 'prompt', minta izin saat aplikasi dimulai
+        if (permission.state === 'prompt') {
+          navigator.geolocation.getCurrentPosition(
+            position => console.log('Geolocation permission granted'),
+            error => console.log('Geolocation permission error:', error),
+            { timeout: 5000 }
+          );
+        }
+      }
+    } catch (e) {
+      console.log('Could not check geolocation permission:', e);
     }
   }
 };
