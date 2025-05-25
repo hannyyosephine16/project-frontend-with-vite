@@ -2009,153 +2009,172 @@ footer {
   }
 }
 
-/* Final CSS Animations - Tambahkan ke styles.css */
+/* Fix for photo preview container visibility */
+.photo-preview-container {
+  display: block !important; /* Ensure it's always visible */
+  min-height: 300px;
+  position: relative;
+  overflow: hidden;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  margin-bottom: 20px;
+}
 
-/* Animation for slideUp */
-@keyframes slideUp {
-  from {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
+/* Ensure photo preview is visible when it has a src */
+.photo-preview[src] {
+  display: block !important;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* Improve camera preview visibility */
+.camera-preview {
+  display: none; /* Hidden by default */
+  width: 100% !important;
+  height: 300px !important;
+  object-fit: cover;
+  border-radius: 8px;
+  background-color: #000; /* Dark background for better contrast */
+}
+
+/* Better visibility for camera buttons */
+.camera-btn {
+  margin: 5px;
+  min-width: 120px;
+  opacity: 0.9;
+}
+
+.camera-btn:hover {
+  opacity: 1;
+}
+
+/* Make error container more visible */
+.error-container {
+  min-height: 20px;
+  margin: 15px 0;
+}
+
+/* More visible permission indicator */
+.permission-indicator {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2658c9;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 10000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  animation: slideDown 0.3s ease-out;
+  max-width: 80%;
+  text-align: center;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .camera-container {
+    overflow: hidden;
   }
-  to {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-20px);
+  
+  .camera-preview, 
+  .photo-preview-container,
+  .photo-preview {
+    height: 250px !important;
+  }
+  
+  .camera-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  .permission-indicator {
+    width: 90%;
+    left: 5%;
+    right: 5%;
+    transform: none;
+    border-radius: 8px;
+  }
+  
+  .photo-input-container {
+    padding: 15px;
   }
 }
 
-/* Enhanced photo preview placeholder */
+/* Debugging styles to help visualize the state of elements */
+.debug-outline {
+  outline: 2px solid red !important;
+}
+
+/* Special styles for permission requests */
+.permission-help {
+  margin-top: 15px;
+  background-color: #e3f2fd;
+  border: 1px solid #2196f3;
+  border-radius: 6px;
+  padding: 16px;
+  font-size: 14px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.permission-help h4 {
+  color: #1976d2;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+/* Enhanced visibility for no photo placeholder */
 .no-photo-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 15px;
-  color: #999;
-  font-size: 16px;
   height: 100%;
+  color: #757575;
+  font-size: 16px;
+  padding: 40px 20px;
 }
 
 .no-photo-placeholder svg {
-  opacity: 0.5;
-}
-
-/* Map error styling */
-.map-error {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 300px;
-  background-color: #f5f5f5;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  color: #666;
-  font-size: 14px;
-}
-
-/* Enhanced loading states */
-.camera-btn.requesting {
-  background-color: #ff9800 !important;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-/* Form validation improvements */
-.form-group textarea:invalid:not(:focus):not(:placeholder-shown) {
-  border-color: #f44336;
-  box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.1);
-}
-
-.form-group textarea:valid:not(:focus):not(:placeholder-shown) {
-  border-color: #4caf50;
-}
-
-/* Better file input styling */
-#photo-upload {
-  transition: border-color 0.2s ease;
-}
-
-#photo-upload:hover {
-  border-color: var(--primary-color);
-}
-
-#photo-upload:focus {
-  border-color: var(--primary-color);
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(38, 88, 201, 0.1);
-}
-
-/* Permission indicator mobile positioning */
-@media (max-width: 768px) {
-  .permission-indicator {
-    left: 10px;
-    right: 10px;
-    transform: none;
-    border-radius: 6px;
-  }
-  
-  @keyframes slideUp {
-    from {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateY(-20px);
-    }
-  }
-}
-
-/* Enhanced button hover effects */
-.camera-btn:not(:disabled):hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.location-btn:not(:disabled):hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(38, 88, 201, 0.3);
-}
-
-/* Loading spinner improvements */
-.loading-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-/* Success state animations */
-.submit-button.success {
-  animation: successPulse 0.6s ease-out;
-}
-
-@keyframes successPulse {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-/* Form disabled state */
-.add-story-form.disabled input,
-.add-story-form.disabled textarea,
-.add-story-form.disabled button:not(.submit-button) {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 15px;
   opacity: 0.6;
-  cursor: not-allowed;
 }
 
-/* Enhanced error message animations */
+/* Better file upload styling */
+input[type="file"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  margin-top: 10px;
+}
+
+/* Error message enhancements */
 .error-message {
-  animation: errorSlideIn 0.3s ease-out;
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 15px;
+  border-radius: 4px;
+  margin: 15px 0;
+  border: 1px solid #ffcdd2;
+  border-left: 4px solid #f44336;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  animation: fadeIn 0.3s ease-out;
 }
 
-@keyframes errorSlideIn {
+@keyframes fadeIn {
   from {
     opacity: 0;
     transform: translateY(-10px);
@@ -2164,4 +2183,25 @@ footer {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* HTTPS warning styling */
+.https-warning {
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  color: #856404;
+  padding: 16px;
+  border-radius: 6px;
+  margin: 15px 0;
+  font-size: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.https-warning svg {
+  color: #f39c12;
+  flex-shrink: 0;
+  margin-top: 3px;
 }

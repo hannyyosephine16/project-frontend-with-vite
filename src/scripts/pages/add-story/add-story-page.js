@@ -170,12 +170,23 @@ export default class AddStoryPage {
     if (!AuthStore.isLoggedIn()) {
       window.location.hash = '#/login';
     }
+    
+    // Make sure photo preview container is visible
+    const photoPreviewContainer = document.getElementById('photo-preview-container');
+    if (photoPreviewContainer) {
+      photoPreviewContainer.style.display = 'block';
+    }
   }
   
   // Check HTTPS and show warning if needed
   _checkHTTPS() {
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-      const errorContainer = document.getElementById('error-container');
+    const errorContainer = document.getElementById('error-container');
+    const isLocalhost = location.hostname === 'localhost' || 
+                        location.hostname === '127.0.0.1' ||
+                        location.hostname.includes('netlify.app'); // Allow netlify preview URLs
+    
+    if (location.protocol !== 'https:' && !isLocalhost) {
+    //  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
       errorContainer.innerHTML = `
         <div class="https-warning">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -203,6 +214,14 @@ export default class AddStoryPage {
     const photoCanvas = document.getElementById('photo-canvas');
     const photoPreviewContainer = document.getElementById('photo-preview-container');
     const photoPreview = document.getElementById('photo-preview');
+    
+    // Ensure elements exist
+    if (!openCameraBtn || !cameraPreview || !photoPreviewContainer) {
+      console.error('Camera UI elements not found');
+      this._showError('An error occurred while initializing the camera interface');
+      return;
+    }
+    
     const noPhotoPlaceholder = photoPreviewContainer.querySelector('.no-photo-placeholder');
     
     let currentCamera = 'environment'; // Start with back camera
@@ -225,6 +244,18 @@ export default class AddStoryPage {
           throw new Error('Camera is not supported in this browser. Please use a modern browser like Chrome, Firefox, or Safari.');
         }
         
+        // Debugging info - check all available devices
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter(device => device.kind === 'videoinput');
+          console.log('Available video devices:', videoDevices.length);
+          videoDevices.forEach((device, index) => {
+            console.log(`Camera #${index + 1}: ${device.label || 'Unnamed camera'}`);
+          });
+        } catch (enumError) {
+          console.log('Could not enumerate devices:', enumError);
+        }
+        
         // Check current permission status
         if (navigator.permissions) {
           try {
@@ -244,7 +275,9 @@ export default class AddStoryPage {
         
         // Update UI on success
         cameraPreview.style.display = 'block';
-        noPhotoPlaceholder.style.display = 'none';
+        if (noPhotoPlaceholder) {
+          noPhotoPlaceholder.style.display = 'none';
+        }
         photoPreview.style.display = 'none';
         
         // Show camera controls
@@ -300,22 +333,33 @@ export default class AddStoryPage {
     
     // Take photo when button is clicked
     takePhotoBtn.addEventListener('click', () => {
-      this._capturePhoto();
-      
-      // Hide camera, show photo preview
-      cameraPreview.style.display = 'none';
-      photoPreview.style.display = 'block';
-      noPhotoPlaceholder.style.display = 'none';
-      
-      // Update button states
-      takePhotoBtn.style.display = 'none';
-      switchCameraBtn.style.display = 'none';
-      
-      // Stop camera stream
-      this._stopMediaStream();
-      this._isUsingCamera = false;
-      
-      this._showPermissionIndicator('Photo captured!', 'success');
+      try {
+        if (!this._mediaStream) {
+          throw new Error('Camera is not active. Please restart the camera.');
+        }
+        
+        this._capturePhoto();
+        
+        // Hide camera, show photo preview
+        cameraPreview.style.display = 'none';
+        photoPreview.style.display = 'block';
+        if (noPhotoPlaceholder) {
+          noPhotoPlaceholder.style.display = 'none';
+        }
+        
+        // Update button states
+        takePhotoBtn.style.display = 'none';
+        switchCameraBtn.style.display = 'none';
+        
+        // Stop camera stream
+        this._stopMediaStream();
+        this._isUsingCamera = false;
+        
+        this._showPermissionIndicator('Photo captured!', 'success');
+      } catch (error) {
+        console.error('Error capturing photo:', error);
+        this._showError('Failed to capture photo: ' + error.message);
+      }
     });
     
     // Switch camera (front/back)
@@ -378,6 +422,8 @@ export default class AddStoryPage {
   
   // Enhanced startCamera method with better error handling
   async _startCamera(facingMode) {
+    console.log(`Starting camera with facingMode: ${facingMode}`);
+    
     // Try different constraint configurations for better compatibility
     const constraints = [
       // First try: specific facingMode with ideal resolution
@@ -394,7 +440,16 @@ export default class AddStoryPage {
         video: { facingMode: facingMode },
         audio: false,
       },
-      // Third try: any camera
+      // Third try: any camera with fallback options
+      {
+        video: { 
+          facingMode: facingMode,
+          width: { ideal: 320 },
+          height: { ideal: 240 }
+        },
+        audio: false,
+      },
+      // Last resort: any video device
       {
         video: true,
         audio: false,
@@ -409,12 +464,20 @@ export default class AddStoryPage {
         this._mediaStream = await navigator.mediaDevices.getUserMedia(constraints[i]);
         
         const cameraPreview = document.getElementById('camera-preview');
+        if (!cameraPreview) {
+          throw new Error('Camera preview element not found');
+        }
+        
+        // Set the stream as the source of the video element
         cameraPreview.srcObject = this._mediaStream;
+        
+        // Log when video metadata is loaded
+        console.log('Video metadata loaded, camera ready');
         
         // Wait for video to load
         return new Promise((resolve, reject) => {
           cameraPreview.onloadedmetadata = () => {
-            console.log('Camera started successfully');
+            console.log('Camera started successfully', cameraPreview.videoWidth, 'x', cameraPreview.videoHeight);
             resolve();
           };
           
@@ -442,27 +505,55 @@ export default class AddStoryPage {
   }
   
   _capturePhoto() {
+    console.log('Capturing photo');
     const cameraPreview = document.getElementById('camera-preview');
     const photoCanvas = document.getElementById('photo-canvas');
     const photoPreview = document.getElementById('photo-preview');
+    
+    if (!cameraPreview || !photoCanvas || !photoPreview) {
+      throw new Error('Required photo elements not found');
+    }
+    
+    // Check if video is ready
+    if (!cameraPreview.videoWidth) {
+      throw new Error('Camera video is not ready yet');
+    }
     
     // Set canvas dimensions to match video
     photoCanvas.width = cameraPreview.videoWidth;
     photoCanvas.height = cameraPreview.videoHeight;
     
-    // Draw video frame to canvas
-    const context = photoCanvas.getContext('2d');
-    context.drawImage(cameraPreview, 0, 0, photoCanvas.width, photoCanvas.height);
+    console.log(`Canvas dimensions set to ${photoCanvas.width}x${photoCanvas.height}`);
     
-    // Convert canvas to blob
-    photoCanvas.toBlob((blob) => {
-      // Create a File object from the blob
-      this._photoFile = new File([blob], `camera-photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    try {
+      // Draw video frame to canvas
+      const context = photoCanvas.getContext('2d');
+      context.drawImage(cameraPreview, 0, 0, photoCanvas.width, photoCanvas.height);
       
-      // Display the captured photo
-      const photoUrl = URL.createObjectURL(blob);
-      photoPreview.src = photoUrl;
-    }, 'image/jpeg', 0.8);
+      console.log('Image drawn to canvas');
+      
+      // Convert canvas to blob
+      photoCanvas.toBlob((blob) => {
+        if (!blob) {
+          throw new Error('Failed to create image blob');
+        }
+        
+        console.log(`Photo blob created: ${blob.size} bytes`);
+        
+        // Create a File object from the blob
+        this._photoFile = new File([blob], `camera-photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        
+        // Display the captured photo
+        const photoUrl = URL.createObjectURL(blob);
+        photoPreview.src = photoUrl;
+        photoPreview.onload = () => {
+          console.log('Photo preview loaded successfully');
+        };
+      }, 'image/jpeg', 0.8);
+    } catch (error) {
+      console.error('Error capturing photo:', error);
+      throw new Error('Failed to capture photo: ' + error.message);
+    }
   }
   
   _handleFileUpload(file) {
@@ -485,9 +576,17 @@ export default class AddStoryPage {
     const photoPreview = document.getElementById('photo-preview');
     const noPhotoPlaceholder = document.querySelector('.no-photo-placeholder');
     
+    if (!photoPreview) {
+      this._showError('Photo preview element not found');
+      return;
+    }
+    
     photoPreview.src = photoUrl;
     photoPreview.style.display = 'block';
-    noPhotoPlaceholder.style.display = 'none';
+    
+    if (noPhotoPlaceholder) {
+      noPhotoPlaceholder.style.display = 'none';
+    }
     
     // Show reset button
     document.getElementById('reset-btn').style.display = 'inline-flex';
@@ -514,26 +613,41 @@ export default class AddStoryPage {
     const noPhotoPlaceholder = document.querySelector('.no-photo-placeholder');
     const cameraPreview = document.getElementById('camera-preview');
     
-    photoPreview.src = '';
-    photoPreview.style.display = 'none';
-    cameraPreview.style.display = 'none';
-    noPhotoPlaceholder.style.display = 'block';
+    if (photoPreview) {
+      photoPreview.src = '';
+      photoPreview.style.display = 'none';
+    }
+    
+    if (cameraPreview) {
+      cameraPreview.style.display = 'none';
+    }
+    
+    if (noPhotoPlaceholder) {
+      noPhotoPlaceholder.style.display = 'block';
+    }
     
     // Reset buttons
-    document.getElementById('open-camera-btn').style.display = 'inline-flex';
-    document.getElementById('take-photo-btn').style.display = 'none';
-    document.getElementById('switch-camera-btn').style.display = 'none';
-    document.getElementById('reset-btn').style.display = 'none';
+    const openCameraBtn = document.getElementById('open-camera-btn');
+    const takePhotoBtn = document.getElementById('take-photo-btn');
+    const switchCameraBtn = document.getElementById('switch-camera-btn');
+    const resetBtn = document.getElementById('reset-btn');
+    
+    if (openCameraBtn) openCameraBtn.style.display = 'inline-flex';
+    if (takePhotoBtn) takePhotoBtn.style.display = 'none';
+    if (switchCameraBtn) switchCameraBtn.style.display = 'none';
+    if (resetBtn) resetBtn.style.display = 'none';
     
     // Clear file input
-    document.getElementById('photo-upload').value = '';
+    const photoUpload = document.getElementById('photo-upload');
+    if (photoUpload) photoUpload.value = '';
     
     // Stop camera stream
     this._stopMediaStream();
     this._isUsingCamera = false;
     
     // Clear any error messages
-    document.getElementById('error-container').innerHTML = '';
+    const errorContainer = document.getElementById('error-container');
+    if (errorContainer) errorContainer.innerHTML = '';
   }
   
   _setupLocationMap() {
@@ -715,279 +829,5 @@ export default class AddStoryPage {
     
     locationText.style.display = 'block';
     locationDisplay.style.display = 'none';
-  }
-  
-  _setupForm() {
-    const addStoryForm = document.getElementById('add-story-form');
-    
-    addStoryForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      
-      const description = document.getElementById('description').value.trim();
-      
-      // Validate inputs
-      if (!description) {
-        this._showError('Please enter a description for your story');
-        document.getElementById('description').focus();
-        return;
-      }
-      
-      if (description.length < 10) {
-        this._showError('Story description should be at least 10 characters long');
-        document.getElementById('description').focus();
-        return;
-      }
-      
-      if (!this._photoFile) {
-        this._showError('Please capture or upload a photo');
-        return;
-      }
-      
-      await this._submitStory(description);
-    });
-  }
-  
-  async _submitStory(description) {
-    const submitButton = document.getElementById('submit-button');
-    const errorContainer = document.getElementById('error-container');
-    const form = document.getElementById('add-story-form');
-    
-    try {
-      errorContainer.innerHTML = '';
-      
-      // Update button state
-      submitButton.innerHTML = `
-        <div class="loading-spinner"></div>
-        Posting Story...
-      `;
-      submitButton.disabled = true;
-      submitButton.classList.add('loading');
-      
-      // Disable form
-      const formElements = form.querySelectorAll('input, textarea, button');
-      formElements.forEach(element => {
-        if (element !== submitButton) {
-          element.disabled = true;
-        }
-      });
-      
-      const auth = AuthStore.getAuth();
-      
-      // Prepare data for API
-      const storyData = {
-        token: auth.token,
-        description,
-        photo: this._photoFile,
-      };
-      
-      // Add location if available
-      if (this._location) {
-        storyData.lat = this._location.lat;
-        storyData.lon = this._location.lon;
-      }
-      
-      // Send data to API
-      const result = await StoryApi.addStory(storyData);
-      
-      if (result.error) {
-        throw new Error(result.message);
-      }
-      
-      // Show success message
-      errorContainer.innerHTML = `
-        <div class="success-message">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-            <polyline points="22,4 12,14.01 9,11.01"></polyline>
-          </svg>
-          <p>Story posted successfully! Redirecting to home...</p>
-        </div>
-      `;
-      
-      // Update button to success state
-      submitButton.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-          <polyline points="22,4 12,14.01 9,11.01"></polyline>
-        </svg>
-        Story Posted!
-      `;
-      submitButton.classList.remove('loading');
-      submitButton.classList.add('success');
-      
-      this._showPermissionIndicator('Story posted successfully!', 'success');
-      
-      // Redirect to home page after 2 seconds
-      setTimeout(() => {
-        window.location.hash = '#/';
-      }, 2000);
-      
-    } catch (error) {
-      console.error('Error posting story:', error);
-      this._showError(error.message || 'Failed to post story. Please try again.');
-      
-      // Reset button
-      submitButton.innerHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
-          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
-        </svg>
-        Post Story
-      `;
-      submitButton.disabled = false;
-      submitButton.classList.remove('loading');
-      
-      // Re-enable form
-      const form = document.getElementById('add-story-form');
-      const formElements = form.querySelectorAll('input, textarea, button');
-      formElements.forEach(element => {
-        element.disabled = false;
-      });
-      
-      this._showPermissionIndicator('Failed to post story', 'error');
-    }
-  }
-  
-  // Show camera permission help
-  _showCameraPermissionHelp() {
-    const errorContainer = document.getElementById('error-container');
-    
-    const isChrome = /Chrome/.test(navigator.userAgent);
-    const isFirefox = /Firefox/.test(navigator.userAgent);
-    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
-    
-    let helpText = '';
-    
-    if (isChrome) {
-      helpText = `
-        <div class="permission-help">
-          <h4>How to enable camera in Chrome:</h4>
-          <ol>
-            <li>Click the camera icon in the address bar</li>
-            <li>Select "Always allow" for camera access</li>
-            <li>Refresh the page and try again</li>
-          </ol>
-          <p>Or go to Settings → Privacy and security → Site Settings → Camera</p>
-        </div>
-      `;
-    } else if (isFirefox) {
-      helpText = `
-        <div class="permission-help">
-          <h4>How to enable camera in Firefox:</h4>
-          <ol>
-            <li>Click the shield icon in the address bar</li>
-            <li>Turn off "Enhanced Tracking Protection" for this site</li>
-            <li>Or click the camera icon and select "Allow"</li>
-          </ol>
-        </div>
-      `;
-    } else if (isSafari) {
-      helpText = `
-        <div class="permission-help">
-          <h4>How to enable camera in Safari:</h4>
-          <ol>
-            <li>Go to Safari → Preferences → Websites</li>
-            <li>Select "Camera" from the list</li>
-            <li>Set this website to "Allow"</li>
-          </ol>
-        </div>
-      `;
-    } else {
-      helpText = `
-        <div class="permission-help">
-          <h4>Camera Permission Required:</h4>
-          <p>Please allow camera access when prompted by your browser, then try again.</p>
-        </div>
-      `;
-    }
-    
-    errorContainer.innerHTML += helpText;
-  }
-  
-  // Show permission indicator
-  _showPermissionIndicator(message, type = 'info') {
-    // Remove existing indicator
-    const existing = document.querySelector('.permission-indicator');
-    if (existing) {
-      existing.remove();
-    }
-    
-    const indicator = document.createElement('div');
-    indicator.className = `permission-indicator ${type}`;
-    indicator.textContent = message;
-    
-    document.body.appendChild(indicator);
-    
-    // Auto remove after 4 seconds
-    setTimeout(() => {
-      if (indicator.parentNode) {
-        indicator.style.animation = 'slideUp 0.3s ease-in forwards';
-        setTimeout(() => {
-          if (indicator.parentNode) {
-            indicator.remove();
-          }
-        }, 300);
-      }
-    }, 4000);
-  }
-  
-  // Enhanced error showing with better UX
-  _showError(message) {
-    const errorContainer = document.getElementById('error-container');
-    
-    // Create error element
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'error-message';
-    errorDiv.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="15" y1="9" x2="9" y2="15"></line>
-        <line x1="9" y1="9" x2="15" y2="15"></line>
-      </svg>
-      <div>
-        <p>${message}</p>
-        ${message.includes('permission') ? '<p><small>💡 Tip: Look for a camera icon in your browser\'s address bar</small></p>' : ''}
-      </div>
-    `;
-    
-    // Clear previous errors and add new one
-    errorContainer.innerHTML = '';
-    errorContainer.appendChild(errorDiv);
-    
-    // Scroll to error message
-    errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    
-    // Auto-hide non-critical errors after 10 seconds
-    if (!message.includes('permission') && !message.includes('denied')) {
-      setTimeout(() => {
-        if (errorDiv.parentNode) {
-          errorDiv.style.opacity = '0.5';
-        }
-      }, 10000);
-    }
-  }
-  
-  _stopMediaStream() {
-    if (this._mediaStream) {
-      this._mediaStream.getTracks().forEach(track => track.stop());
-      this._mediaStream = null;
-    }
-  }
-  
-  // Clean up resources when navigating away
-  async beforeDestroy() {
-    this._stopMediaStream();
-    
-    // Clean up map if it exists
-    if (this._map) {
-      this._map.remove();
-      this._map = null;
-    }
-    
-    // Remove any permission indicators
-    const indicator = document.querySelector('.permission-indicator');
-    if (indicator) {
-      indicator.remove();
-    }
   }
 }
